@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHCP Management</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-900">
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="h-8 w-auto">
+                    <span class="text-xl font-bold tracking-tight text-slate-900">DHCP <span class="text-blue-600 font-extrabold">MANAGER</span></span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="/logout" class="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-red-600 transition-colors bg-slate-100 hover:bg-red-50 px-4 py-2 rounded-lg">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div id="toast-container" class="fixed top-20 right-4 z-50 pointer-events-none flex flex-col gap-3 max-w-sm w-full"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Left Column: Form -->
+            <div class="lg:col-span-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden sticky top-24">
+                    <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                        <h3 id="form-title" class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fas fa-plus-circle text-blue-600"></i> Add Reservation
+                        </h3>
+                        <p id="form-desc" class="text-xs text-slate-500 mt-1">Reserve a specific IP for a MAC address.</p>
+                    </div>
+                    <div class="p-6">
+                        <form id="dhcp-form" class="space-y-4">
+                            <input type="hidden" id="edit-mode" value="false">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">MAC Address</label>
+                                <input type="text" id="mac" name="mac" required 
+                                    placeholder="e.g. 50:6b:8d:..."
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">IP Address</label>
+                                <input type="text" id="ip" name="ip" required 
+                                    placeholder="e.g. 10.142.152.171"
+                                    class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none text-sm">
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="submit" id="submit-btn"
+                                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-100 transition-all flex items-center justify-center gap-2 mt-2 active:scale-[0.98]">
+                                    <i class="fas fa-save"></i> Save Reservation
+                                </button>
+                                <button type="button" id="cancel-btn" onclick="resetForm()"
+                                    class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center mt-2 active:scale-[0.98]">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Tables -->
+            <div class="lg:col-span-8 space-y-8">
+                <!-- Static Reservations Table -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                <i class="fas fa-id-badge text-blue-600"></i> Static Reservations
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1">Configured static IP assignments.</p>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/50 border-b border-slate-100">
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">MAC Address</th>
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">IP Address</th>
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reservations-tbody" class="divide-y divide-slate-100">
+                                {% for res in reservations %}
+                                <tr class="hover:bg-slate-50/50 transition-colors">
+                                    <td class="px-6 py-4 text-sm font-mono text-slate-600">{{ res.mac }}</td>
+                                    <td class="px-6 py-4 text-sm text-slate-900 font-mono">{{ res.ip }}</td>
+                                    <td class="px-6 py-4 text-sm text-right space-x-2">
+                                        <button onclick="editReservation('{{ res.mac }}', '{{ res.ip }}')" class="text-slate-400 hover:text-blue-600 p-1.5 hover:bg-blue-50 rounded-md transition-all" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button onclick="deleteReservation('{{ res.mac }}')" class="text-slate-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-all" title="Delete">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Active Leases Table -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fas fa-network-wired text-blue-600"></i> Active Leases
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1">Current dynamic and static leases in use.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/50 border-b border-slate-100">
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">MAC Address</th>
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">IP Address</th>
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Hostname</th>
+                                    <th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">Expires</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                {% for lease in leases %}
+                                <tr class="hover:bg-slate-50/50 transition-colors">
+                                    <td class="px-6 py-4 text-sm font-mono text-slate-600">{{ lease.mac }}</td>
+                                    <td class="px-6 py-4 text-sm text-slate-900 font-mono">{{ lease.ip }}</td>
+                                    <td class="px-6 py-4 text-sm text-slate-600">{{ lease.hostname }}</td>
+                                    <td class="px-6 py-4 text-sm text-slate-500 text-xs">{{ lease.expiry }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const dhcpForm = document.getElementById('dhcp-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const editModeInput = document.getElementById('edit-mode');
+        const macInput = document.getElementById('mac');
+        const ipInput = document.getElementById('ip');
+        const formTitle = document.getElementById('form-title');
+        const formDesc = document.getElementById('form-desc');
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+            const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+            
+            toast.className = `pointer-events-auto flex items-center p-4 rounded-xl shadow-2xl text-white ${bgColor} transform transition-all duration-300 translate-y-[-20px] opacity-0`;
+            toast.innerHTML = `
+                <i class="fas ${icon} mr-3 text-lg"></i>
+                <div class="flex-1 text-sm font-semibold">${message}</div>
+                <button class="ml-4 text-white/70 hover:text-white"><i class="fas fa-times"></i></button>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animation in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+            });
+            
+            // Auto remove
+            const remove = () => {
+                toast.classList.add('translate-y-[-20px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            };
+            
+            toast.querySelector('button').onclick = remove;
+            setTimeout(remove, 4000);
+        }
+
+        function resetForm() {
+            dhcpForm.reset();
+            editModeInput.value = 'false';
+            macInput.readOnly = false;
+            macInput.classList.remove('bg-slate-200', 'cursor-not-allowed');
+            formTitle.innerHTML = '<i class="fas fa-plus-circle text-blue-600"></i> Add Reservation';
+            formDesc.innerText = 'Reserve a specific IP for a MAC address.';
+            submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Reservation';
+            cancelBtn.classList.add('hidden');
+        }
+
+        function editReservation(mac, ip) {
+            editModeInput.value = 'true';
+            macInput.value = mac;
+            ipInput.value = ip;
+            
+            macInput.readOnly = true;
+            macInput.classList.add('bg-slate-200', 'cursor-not-allowed');
+            formTitle.innerHTML = '<i class="fas fa-edit text-blue-600"></i> Update Reservation';
+            formDesc.innerText = 'Modify the IP address for this static reservation.';
+            submitBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Update Reservation';
+            cancelBtn.classList.remove('hidden');
+            
+            ipInput.focus();
+            showToast('Loaded reservation for update', 'success');
+        }
+
+        dhcpForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const mac = macInput.value;
+            const ip = ipInput.value;
+            const isEdit = editModeInput.value === 'true';
+            
+            const endpoint = isEdit ? 'update' : 'add';
+            
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mac, ip })
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    showToast(data.message);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (err) {
+                showToast(`Failed to ${isEdit ? 'update' : 'add'} reservation`, 'error');
+            }
+        };
+
+        async function deleteReservation(mac) {
+            if (!confirm(`Are you sure you want to delete the reservation for ${mac}?`)) return;
+            
+            try {
+                const response = await fetch(`delete/${mac}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    showToast(data.message);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            } catch (err) {
+                showToast('Failed to delete reservation', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
